@@ -76,7 +76,6 @@ main/smart-tennis/
   - `$env:YOLO_MODEL_PATH = "D:\work\Tennis\main\model\last.pt"`
   - `python main\smart-tennis\backend\app.py`
 
-提示：也可將環境變數寫入 `main\smart-tennis\.env`，未來可支援自動載入。
 
 ## 前置需求
 - Python 3.10+（建議 3.11/3.12 以上）
