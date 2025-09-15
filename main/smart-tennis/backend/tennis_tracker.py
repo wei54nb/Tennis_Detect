@@ -1,0 +1,250 @@
+import cv2
+import numpy as np
+from ultralytics import YOLO
+import os
+from collections import defaultdict
+
+class TennisTracker:
+    def __init__(self, model_path=None):
+        """
+        初始化網球追蹤器
+        """
+        if model_path is None:
+            model_path = '../models/yolov8n.pt'
+        
+        self.model_path = model_path
+        self.model = None
+        self.load_model()
+        
+        # 網球類別ID (COCO數據集中網球是37)
+        self.tennis_ball_class_id = 37
+        
+        # 追蹤參數
+        self.confidence_threshold = 0.3
+        self.max_disappeared = 10
+        
+    def load_model(self):
+        """載入YOLO模型"""
+        try:
+            # 如果模型不存在，下載預訓練模型
+            if not os.path.exists(self.model_path):
+                print("下載 YOLOv8 模型...")
+                os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
+                self.model = YOLO('yolov8n.pt')  # 這會自動下載模型
+                self.model.save(self.model_path)
+            else:
+                self.model = YOLO(self.model_path)
+            
+            print(f"已載入 YOLO 模型: {self.model_path}")
+        except Exception as e:
+            print(f"載入模型失敗: {e}")
+            # 使用預設模型作為備選
+            self.model = YOLO('yolov8n.pt')
+    
+    def detect_tennis_ball(self, frame):
+        """
+        在單一幀中檢測網球
+        """
+        results = self.model(frame, verbose=False)
+        detections = []
+        
+        for result in results:
+            boxes = result.boxes
+            if boxes is not None:
+                for box in boxes:
+                    # 檢查是否為網球或運動球類
+                    class_id = int(box.cls[0])
+                    confidence = float(box.conf[0])
+                    
+                    # 擴展檢測範圍，包含球類物體
+                    if (class_id == self.tennis_ball_class_id or 
+                        class_id in [32, 33, 34, 35, 36, 37]) and confidence > self.confidence_threshold:
+                        
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        center_x = (x1 + x2) / 2
+                        center_y = (y1 + y2) / 2
+                        width = x2 - x1
+                        height = y2 - y1
+                        
+                        detections.append({
+                            'center': (center_x, center_y),
+                            'bbox': (x1, y1, x2, y2),
+                            'confidence': confidence,
+                            'size': (width, height)
+                        })
+        
+        return detections
+    
+    def track_ball(self, video_path, output_path=None):
+        """
+        追蹤整個影片中的網球
+        """
+        print(f"開始追蹤網球: {video_path}")
+        
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"無法開啟影片: {video_path}")
+        
+        # 獲取影片資訊
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # 初始化追蹤結果
+        tracking_results = {
+            'video_info': {
+                'fps': fps,
+                'width': width,
+                'height': height,
+                'total_frames': total_frames
+            },
+            'ball_positions': [],
+            'trajectories': []
+        }
+        
+        # 設置輸出影片
+        if output_path:
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        
+        frame_count = 0
+        ball_tracks = defaultdict(list)
+        current_track_id = 0
+        
+        print(f"處理 {total_frames} 幀...")
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # 檢測網球
+            detections = self.detect_tennis_ball(frame)
+            
+            frame_data = {
+                'frame_number': frame_count,
+                'timestamp': frame_count / fps,
+                'detections': detections
+            }
+            
+            tracking_results['ball_positions'].append(frame_data)
+            
+            # 繪製檢測結果
+            if output_path:
+                annotated_frame = self.draw_detections(frame, detections, frame_count)
+                out.write(annotated_frame)
+            
+            frame_count += 1
+            
+            # 進度顯示
+            if frame_count % 30 == 0:
+                progress = (frame_count / total_frames) * 100
+                print(f"處理進度: {progress:.1f}%")
+        
+        cap.release()
+        if output_path:
+            out.release()
+        
+        # 分析軌跡
+        tracking_results['trajectories'] = self.analyze_trajectories(tracking_results['ball_positions'])
+        
+        print(f"追蹤完成，共檢測到 {len([p for p in tracking_results['ball_positions'] if p['detections']])} 幀包含網球")
+        
+        return tracking_results
+    
+    def draw_detections(self, frame, detections, frame_number):
+        """
+        在幀上繪製檢測結果
+        """
+        annotated_frame = frame.copy()
+        
+        for detection in detections:
+            x1, y1, x2, y2 = detection['bbox']
+            center_x, center_y = detection['center']
+            confidence = detection['confidence']
+            
+            # 繪製邊界框
+            cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            
+            # 繪製中心點
+            cv2.circle(annotated_frame, (int(center_x), int(center_y)), 5, (0, 0, 255), -1)
+            
+            # 顯示信心分數
+            label = f"Ball: {confidence:.2f}"
+            cv2.putText(annotated_frame, label, (int(x1), int(y1) - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+        # 顯示幀號
+        cv2.putText(annotated_frame, f"Frame: {frame_number}", (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        return annotated_frame
+    
+    def analyze_trajectories(self, ball_positions):
+        """
+        分析網球軌跡
+        """
+        trajectories = []
+        current_trajectory = []
+        
+        for frame_data in ball_positions:
+            if frame_data['detections']:
+                # 取最可信的檢測
+                best_detection = max(frame_data['detections'], key=lambda x: x['confidence'])
+                current_trajectory.append({
+                    'frame': frame_data['frame_number'],
+                    'timestamp': frame_data['timestamp'],
+                    'position': best_detection['center'],
+                    'confidence': best_detection['confidence']
+                })
+            else:
+                # 如果檢測中斷，結束當前軌跡
+                if len(current_trajectory) > 5:  # 只保留足夠長的軌跡
+                    trajectories.append(current_trajectory)
+                current_trajectory = []
+        
+        # 處理最後一段軌跡
+        if len(current_trajectory) > 5:
+            trajectories.append(current_trajectory)
+        
+        # 分析每條軌跡
+        analyzed_trajectories = []
+        for i, trajectory in enumerate(trajectories):
+            analysis = self.analyze_single_trajectory(trajectory, i)
+            analyzed_trajectories.append(analysis)
+        
+        return analyzed_trajectories
+    
+    def analyze_single_trajectory(self, trajectory, trajectory_id):
+        """
+        分析單條軌跡
+        """
+        if len(trajectory) < 2:
+            return None
+        
+        positions = [point['position'] for point in trajectory]
+        timestamps = [point['timestamp'] for point in trajectory]
+        
+        # 計算速度
+        velocities = []
+        for i in range(1, len(positions)):
+            dx = positions[i][0] - positions[i-1][0]
+            dy = positions[i][1] - positions[i-1][1]
+            dt = timestamps[i] - timestamps[i-1]
+            
+            if dt > 0:
+                speed = np.sqrt(dx**2 + dy**2) / dt  # 像素/秒
+                velocities.append(speed)
+        
+        return {
+            'id': trajectory_id,
+            'start_frame': trajectory[0]['frame'],
+            'end_frame': trajectory[-1]['frame'],
+            'duration': timestamps[-1] - timestamps[0],
+            'positions': positions,
+            'velocities': velocities,
+            'avg_velocity': np.mean(velocities) if velocities else 0,
+            'max_velocity': np.max(velocities) if velocities else 0,
+            'trajectory_length': len(trajectory)
+        }
