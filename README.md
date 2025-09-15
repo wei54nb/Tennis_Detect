@@ -122,6 +122,7 @@ npm start
 cd main\smart-tennis
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
 ```
 
 2) 安裝前端依賴
@@ -133,8 +134,9 @@ npm install
 3) 啟動
 - 後端（終端 1）：
 ```
-cd main\smart-tennis
-.\.venv\Scripts\Activate.ps1
+cd main\smart-tennis                                                                                           
+..venv\Scripts\Activate.ps1                                                                                   
+可選：$env:YOLO_MODEL_PATH = "D:\work\Tennis\main\model\last.pt"                                               
 python backend\app.py
 ```
 - 前端（終端 2）：
