@@ -10,17 +10,41 @@ class TennisTracker:
         初始化網球追蹤器
         """
         if model_path is None:
-            model_path = '../models/yolov8n.pt'
+            # 允許透過環境變數覆寫模型路徑
+            model_path = os.getenv('YOLO_MODEL_PATH', '../models/yolov8n.pt')
         
         self.model_path = model_path
         self.model = None
         self.load_model()
         
-        # 網球類別ID (COCO數據集中網球是37)
+        # 建立可接受的球類類別ID集合（預設涵蓋 COCO 球類 32..37 與 sports ball=37）
+        self.accepted_class_ids = set([32, 33, 34, 35, 36, 37])
+        
+        # 依據模型類別名稱擴充（若自訓模型類別為 "tennis ball" 或含 "tennis" 字樣）
+        try:
+            names = getattr(self.model, 'names', None)
+            if names is None:
+                names = getattr(getattr(self.model, 'model', None), 'names', None)
+            if names is not None:
+                if isinstance(names, dict):
+                    iterable = sorted(names.items())
+                    for idx, name in iterable:
+                        n = str(name).lower()
+                        if n in ('tennis ball', 'sports ball') or 'tennis' in n:
+                            self.accepted_class_ids.add(int(idx))
+                else:
+                    for idx, name in enumerate(names):
+                        n = str(name).lower()
+                        if n in ('tennis ball', 'sports ball') or 'tennis' in n:
+                            self.accepted_class_ids.add(int(idx))
+        except Exception:
+            pass
+        
+        # 網球類別ID (保留原設計，供其他邏輯參考)
         self.tennis_ball_class_id = 37
         
         # 追蹤參數
-        self.confidence_threshold = 0.3
+        self.confidence_threshold = float(os.getenv('CONFIDENCE_THRESHOLD', '0.3'))
         self.max_disappeared = 10
         
     def load_model(self):
@@ -57,8 +81,7 @@ class TennisTracker:
                     confidence = float(box.conf[0])
                     
                     # 擴展檢測範圍，包含球類物體
-                    if (class_id == self.tennis_ball_class_id or 
-                        class_id in [32, 33, 34, 35, 36, 37]) and confidence > self.confidence_threshold:
+                    if (class_id in self.accepted_class_ids) and confidence > self.confidence_threshold:
                         
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
                         center_x = (x1 + x2) / 2

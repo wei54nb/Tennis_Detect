@@ -27,7 +27,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # 初始化分析器
-tennis_tracker = TennisTracker()
+tennis_tracker = TennisTracker(model_path=os.getenv('YOLO_MODEL_PATH', None))
 shot_detector = ShotDetector()
 speed_analyzer = SpeedAnalyzer()
 

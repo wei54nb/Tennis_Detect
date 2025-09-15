@@ -3,7 +3,7 @@ echo 🎾 Smart Tennis 專案啟動腳本
 echo ================================
 
 echo 正在啟動後端服務...
-start "Smart Tennis Backend" cmd /k "cd /d %~dp0 && call tennis_env\Scripts\activate.bat && cd backend && python app.py"
+start "Smart Tennis Backend" cmd /k "cd /d %~dp0 && call tennis_env\Scripts\activate.bat && set YOLO_MODEL_PATH=D:\work\Tennis\main\model\last.pt && cd backend && python app.py"
 
 echo 等待後端啟動...
 timeout /t 3 /nobreak > nul

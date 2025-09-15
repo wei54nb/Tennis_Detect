@@ -61,6 +61,23 @@ main/smart-tennis/
 
 ---
 
+## 模型下載
+
+- 若要使用自訂網球偵測模型 `main\model\last.pt`，請先從 Google 雲端硬碟下載檔案並放到對應路徑：
+  - 下載連結：https://drive.google.com/file/d/1MTtgjH7V-WCOIt9S8zdjjNWtXHOIscv0/view?usp=drive_link
+  - 建議放置路徑：`D:\work\Tennis\main\model\last.pt`（Windows 示例）
+  - 專案後端會讀取環境變數 `YOLO_MODEL_PATH` 以載入此模型；若未設定，預設使用 `../models/yolov8n.pt`
+
+設定方式（Windows PowerShell）
+- 使用提供的批次檔（已內建環境變數）：
+  - `main\smart-tennis\start_backend.bat`
+  - `main\smart-tennis\start_project.bat`
+- 或手動設定環境變數後啟動後端：
+  - `$env:YOLO_MODEL_PATH = "D:\work\Tennis\main\model\last.pt"`
+  - `python main\smart-tennis\backend\app.py`
+
+提示：也可將環境變數寫入 `main\smart-tennis\.env`，未來可支援自動載入。
+
 ## 前置需求
 - Python 3.10+（建議 3.11/3.12 以上）
 - Node.js 16+（建議 LTS）
@@ -77,7 +94,7 @@ main/smart-tennis/
 cd main/smart-tennis
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt  # 已包含 imageio-ffmpeg 無需額外安裝
+pip install -r backend/requirements.txt  
 ```
 
 2) 安裝前端依賴
@@ -106,7 +123,6 @@ npm start
 cd main\smart-tennis
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt  # 已包含 imageio-ffmpeg 無需額外安裝
 ```
 
 2) 安裝前端依賴
